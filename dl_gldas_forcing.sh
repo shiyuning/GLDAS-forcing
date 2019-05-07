@@ -8,6 +8,12 @@ Jul()
     date -d "$1-01-01 +$2 days -1 day" "+%Y-%m-%d";
 }
 
+if [ "$#" -ne 3 ]; then
+    echo "Illegal number of parameters."
+    echo "Usage: \$./dl_gldas_forcing YYYY-MM YYYY-MM DATA_PATH"
+    exit
+fi
+
 START_YEAR=$(echo $1 | awk -F"-" '{ print $1}')
 START_MONTH=$(echo $1 | awk -F"-" '{ print $2}')
 END_YEAR=$(echo $2 | awk -F"-" '{ print $1}')
