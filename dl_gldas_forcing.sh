@@ -62,6 +62,9 @@ touch ${HOME}/.urs_cookies
 echo
 echo "Download starts."
 
+echo "Download GLDAS elevation data..."
+wget https://ldas.gsfc.nasa.gov/sites/default/files/ldas/gldas/ELEV/GLDASp4_elevation_025d.nc4 -P $DATA_PATH &>/dev/null
+
 # Loop through the years to download data
 start_date="$START_YEAR-$(printf "%2.2d" "$START_MONTH")-01"
 end_date=$(date -d "$END_YEAR-$(printf "%2.2d" "$END_MONTH")-01 +1 month -1 day" "+%Y-%m-%d")
