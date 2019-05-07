@@ -1,0 +1,6 @@
+# Add each desired location to a new line.
+# A maximum of 1024 locations can be added.
+# The next line is a required header line and should not be removed
+LATITUDE    LONGITUDE
+40.6125     -78.1408
+41.6125     -78.1408
