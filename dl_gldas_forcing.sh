@@ -3,16 +3,16 @@
 # Bash script to download GLDAS-2.1 data
 # Author: Yuning Shi (yshi.at.psu.edu)
 
-echo "##############################################"
-echo "# GLDAS-forcing                              #"
-echo "# https://github.com/shiyuning/GLDAS-forcing #"
-echo "# Contact: Yuning Shi (yshi.at.psu.edu)      #"
-echo "##############################################"
+Jul()
+{
+    date -d "$1-01-01 +$2 days -1 day" "+%Y-%m-%d";
+}
 
-# Read configuration file
-CONFIG_FILE=./forcing.config
-chmod 700 $CONFIG_FILE
-. $CONFIG_FILE
+START_YEAR=$(echo $1 | awk -F"-" '{ print $1}')
+START_MONTH=$(echo $1 | awk -F"-" '{ print $2}')
+END_YEAR=$(echo $2 | awk -F"-" '{ print $1}')
+END_MONTH=$(echo $2 | awk -F"-" '{ print $2}')
+DATA_PATH=$3
 
 if [ $START_YEAR -lt 2010 ] ; then
     echo
@@ -48,11 +48,6 @@ if [ $START_YEAR -eq $END_YEAR -a $END_MONTH -lt $START_MONTH ] ; then
     exit
 fi
 
-# Create a .netrc file in your home directory
-touch ${HOME}/.netrc
-echo "machine urs.earthdata.nasa.gov login $USER_NAME password $PASSWORD" > ${HOME}/.netrc
-chmod 0600 ${HOME}/.netrc
-
 # Create a cookie file
 # This file will be used to persist sessions across calls to Wget or Curl
 touch ${HOME}/.urs_cookies
@@ -60,5 +55,28 @@ touch ${HOME}/.urs_cookies
 # Run download script
 echo
 echo "Download starts."
-. ./util/dl_gldas.sh download
+
+# Loop through the years to download data
+start_date="$START_YEAR-$(printf "%2.2d" "$START_MONTH")-01"
+end_date=$(date -d "$END_YEAR-$(printf "%2.2d" "$END_MONTH")-01 +1 month -1 day" "+%Y-%m-%d")
+nod=$(( (`date -d $end_date +%s` - `date -d $start_date +%s`) / (24*3600) ))
+
+for (( d=0; d<=$nod; d++ ))
+do
+    cyear=$(date -d "$start_date +$d days" "+%Y")
+    cjday=$(date -d "$start_date +$d days" "+%j")
+
+    nof=$(ls $DATA_PATH/$cyear/$cjday/GLDAS_NOAH025_3H.A$cyear*.021.ch4 2>/dev/null | wc -l)
+    if [ $cyear -eq 2000 -a $cjday -eq 001 ] ; then
+        nof_avail=7
+    else
+        nof_avail=8
+    fi
+
+    if [ $nof -ne $nof_avail ] ; then
+        echo "Downloading $(Jul $cyear $cjday) data..."
+        wget --load-cookies $HOME/.urs_cookies --save-cookies $HOME/.urs_cookies --keep-session-cookies -r -c -nH -nd -np -A ".nc4" "https://hydro1.gesdisc.eosdis.nasa.gov/data/GLDAS/GLDAS_NOAH025_3H.2.1/$cyear/$cjday/" -P $DATA_PATH/$cyear/$cjday &>/dev/null
+    fi
+done
+
 echo "Download completed."
