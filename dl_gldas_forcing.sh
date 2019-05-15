@@ -20,9 +20,9 @@ END_YEAR=$(echo $2 | awk -F"-" '{ print $1}')
 END_MONTH=$(echo $2 | awk -F"-" '{ print $2}')
 DATA_PATH=$3
 
-if [ $START_YEAR -lt 2010 ] ; then
+if [ $START_YEAR -lt 2000 ] ; then
     echo
-    echo "Error: GLDAS-2.1 forcing data range from 01 Jan 2010 to present."
+    echo "Error: GLDAS-2.1 forcing data range from 01 Jan 2000 to present."
     echo "Please specify a valid START_YEAR in forcing.config and try again."
     echo
     exit
