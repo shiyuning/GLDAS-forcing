@@ -3,7 +3,7 @@
 GLDAS-forcing can **download** GLDAS-2.1 forcing data from NASA GES DISC archive, and **generate** Cycles weather files for given locations using GLDAS-2.1 forcing data.
 In specific, the script downloads the GLDAS_NOAH025_3H, i.e., GLDAS Noah Land Surface Model L4 3 hourly 0.25 x 0.25 degree V2.1 data.
 GLDAS-2.1 forcing is a combination of model and observation based forcing data sets (hereafter, GLDAS-2.1).
-GLDAS-2.1 forcing is available from 1 January 2010 to now.
+GLDAS-2.1 forcing is available from 1 January 2000 to now.
 
 ## Usage
 1. Download the code from the [release page](https://github.com/shiyuning/GLDAS-forcing/releases).
