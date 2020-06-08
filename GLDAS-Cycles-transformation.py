@@ -18,9 +18,7 @@ def Closest(lat, lon, path):
     return (best_y, best_x, nc['lat'][best_y], nc['lon'][best_x], nc['GLDAS_elevation'][0, best_y, best_x])
 
 
-def ReadVar(y, x, nc_name):
-
-    nc = Dataset(nc_name, 'r')
+def ReadVar(y, x, nc):
 
     _prcp = nc['Rainf_f_tavg'][0, y, x]
     _temp = nc['Tair_f_inst'][0, y, x]
@@ -51,13 +49,14 @@ def process_day(t, y, x, path):
     process one day of GLDAS data and convert it to Cycles input
     '''
 
-    prcp = 0.0
-    tx = -999.0
-    tn = 999.0
-    wind = 0.0
-    solar = 0.0
-    rhx = -999.0
-    rhn = 999.0
+    prcp = [0.0] * len(y)
+    tx = [-999.0] * len(y)
+    tn = [999.0] * len(y)
+    wind = [0.0] * len(y)
+    solar = [0.0] * len(y)
+    rhx = [-999.0] * len(y)
+    rhn = [999.0] * len(y)
+    data = []
     counter = 0
 
     print(datetime.strftime(t, "%Y-%m-%d"))
@@ -66,45 +65,49 @@ def process_day(t, y, x, path):
 
     for nc_name in os.listdir(nc_path):
         if nc_name.endswith(".nc4"):
+
             nc = Dataset(os.path.join(nc_path, nc_name), 'r')
-            (_prcp, _temp, _wind, _solar, _rh) = ReadVar(y, x, os.path.join(nc_path, nc_name))
 
-            prcp += _prcp
+            for i in range(len(y)):
+                (_prcp, _temp, _wind, _solar, _rh) = ReadVar(y[i], x[i], nc)
 
-            if _temp > tx:
-                tx = _temp
+                prcp[i] += _prcp
 
-            if _temp < tn:
-                tn = _temp
+                if _temp > tx[i]:
+                    tx[i] = _temp
 
-            wind += _wind
+                if _temp < tn[i]:
+                    tn[i] = _temp
 
-            solar += _solar
+                wind[i] += _wind
 
-            if _rh > rhx:
-                rhx = _rh
+                solar[i] += _solar
 
-            if _rh < rhn:
-                rhn = _rh
+                if _rh > rhx[i]:
+                    rhx[i] = _rh
+
+                if _rh < rhn[i]:
+                    rhn[i] = _rh
 
             counter += 1
 
-    prcp /= float(counter)
-    prcp *= 86400.0
+    for i in range(len(y)):
+        prcp[i] /= float(counter)
+        prcp[i] *= 86400.0
 
-    wind /= float(counter)
+        wind[i] /= float(counter)
 
-    solar /= float(counter)
-    solar *= 86400.0 / 1.0E6
+        solar[i] /= float(counter)
+        solar[i] *= 86400.0 / 1.0E6
 
-    rhx *= 100.0
-    rhn *= 100.0
+        rhx[i] *= 100.0
+        rhn[i] *= 100.0
 
-    tx -= 273.15
-    tn -= 273.15
+        tx[i] -= 273.15
+        tn[i] -= 273.15
 
-    data = '%-16s%-8.4f%-8.2f%-8.2f%-8.4f%-8.2f%-8.2f%-8.2f\n' \
-       %(t.strftime('%Y    %j'), prcp, tx, tn, solar, rhx, rhn, wind)
+        data.append('%-16s%-8.4f%-8.2f%-8.2f%-8.4f%-8.2f%-8.2f%-8.2f\n' \
+           %(t.strftime('%Y    %j'), prcp[i], tx[i], tn[i], solar[i], rhx[i], rhn[i], wind[i]))
 
     return data
 
@@ -121,44 +124,57 @@ def main():
     data_path = sys.argv[3]
 
     filepath = 'location.txt'
+    cnt = 0
+    y = []
+    x = []
+    outfp = []
+
     with open(filepath) as fp:
-        for cnt, line in enumerate(fp):
+        for _, line in enumerate(fp):
             li=line.strip()
             if not (li.startswith("#") or li.startswith("L")):
-                    nums = line.split()
-                    lat = float(nums[0])
-                    lon = float(nums[1])
+                cnt += 1
 
-                    print('Processing data for {0}, {1}'.format(lat, lon))
+                nums = line.split()
+                lat = float(nums[0])
+                lon = float(nums[1])
 
-                    (y, x, grid_lat, grid_lon, elevation) = Closest(lat, lon, data_path)
+                print('Processing data for {0}, {1}'.format(lat, lon))
 
-                    if grid_lat < 0.0:
-                        lat_str = '%.2fS' %(abs(grid_lat))
-                    else:
-                        lat_str = '%.2fN' %(abs(grid_lat))
+                (_y, _x, grid_lat, grid_lon, elevation) = Closest(lat, lon, data_path)
+                x.append(_x)
+                y.append(_y)
 
-                    if grid_lon < 0.0:
-                        lon_str = '%.2fW' %(abs(grid_lon))
-                    else:
-                        lon_str = '%.2fE' %(abs(grid_lon))
+                if grid_lat < 0.0:
+                    lat_str = '%.2fS' %(abs(grid_lat))
+                else:
+                    lat_str = '%.2fN' %(abs(grid_lat))
 
-                    fname = 'met' + lat_str + 'x' + lon_str + '.weather'
-                    outfp = open(fname, 'w')
-                    outfp.write('LATITUDE %.2f\n' %(grid_lat))
-                    outfp.write('ALTITUDE %.2f\n' %(elevation))
-                    outfp.write('SCREENING_HEIGHT 2\n')
-                    outfp.write('YEAR    DOY     PP      TX      TN     SOLAR      RHX      RHN     WIND\n')
+                if grid_lon < 0.0:
+                    lon_str = '%.2fW' %(abs(grid_lon))
+                else:
+                    lon_str = '%.2fE' %(abs(grid_lon))
 
-                    cday = start_date
-
-                    while cday <= end_date:
-                        outfp.write(process_day(cday, y, x, data_path))
-                        cday += timedelta(days = 1)
-
-                    outfp.close()
+                fname = 'met' + lat_str + 'x' + lon_str + '.weather'
+                outfp.append(open(fname, 'w'))
+                outfp[cnt - 1].write('LATITUDE %.2f\n' %(grid_lat))
+                outfp[cnt - 1].write('ALTITUDE %.2f\n' %(elevation))
+                outfp[cnt - 1].write('SCREENING_HEIGHT 2\n')
+                outfp[cnt - 1].write('YEAR    DOY     PP      TX      TN      SOLAR   RHX     RHN     WIND\n')
 
     fp.close
+
+    cday = start_date
+
+    while cday <= end_date:
+        data = process_day(cday, y, x, data_path)
+
+        [outfp[i].write(data[i]) for i in range(cnt)]
+
+        cday += timedelta(days = 1)
+
+    [outfp[i].close() for i in range(cnt)]
+
 
 
 main()
