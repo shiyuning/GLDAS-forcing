@@ -140,15 +140,16 @@ def main():
         for _, line in enumerate(fp):
             li=line.strip()
             if not (li.startswith("#") or li.startswith("L")):
-                nums = line.split()
-                lat = float(nums[0])
-                lon = float(nums[1])
+                # Read lat/lon from location file
+                strs = line.split()
+                lat = float(strs[0])
+                lon = float(strs[1])
 
-                print('Processing data for %s, %s' % (lat, lon))
-
+                # Find the closest GLDAS grid
                 (_y, _x, grid_lat, grid_lon, elevation) = Closest(lat,
                                                                   lon,
                                                                   data_path)
+
                 x.append(_x)
                 y.append(_y)
 
@@ -158,7 +159,16 @@ def main():
                 lon_str = '%.2fW' %(abs(grid_lon)) if grid_lon < 0.0 \
                           else '%.2fE' %(abs(grid_lon))
 
-                fname = 'gldas' + lat_str + 'x' + lon_str + '.weather'
+                if len(strs) == 3:
+                    name = strs[2]
+                    print('Processing data for %s, %s (%s)' % (lat_str,
+                                                               lon_str,
+                                                               name))
+                    fname = 'gldas_' + name + '.weather'
+                else:
+                    print('Processing data for %s, %s' % (lat_str, lon_str))
+                    fname = 'gldas' + lat_str + 'x' + lon_str + '.weather'
+
                 outfp.append(open(fname, 'w'))
                 outfp[-1].write('LATITUDE %.2f\n' % (grid_lat))
                 outfp[-1].write('ALTITUDE %.2f\n' % (elevation))
