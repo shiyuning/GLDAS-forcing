@@ -160,8 +160,12 @@ def main():
 
                 # Check if grid is already in the list
                 if [_y, _x] in loc:
-                    print('Site %s, %s is in the same grid as %s.' %
-                        (lat_str, lon_str, fname[loc.index([_y, _x])]))
+                    if len(strs) == 3:
+                        print('Site %s is in the same grid as %s.' %
+                            (strs[2], fname[loc.index([_y, _x])]))
+                    else:
+                        print('Site %s, %s is in the same grid as %s.' %
+                            (lat_str, lon_str, fname[loc.index([_y, _x])]))
                     continue
 
                 # Add site to list
