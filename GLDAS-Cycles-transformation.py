@@ -15,7 +15,7 @@ def Closest(lat, lon, path):
     best_y = (np.abs(nc.variables['lat'][:] - lat)).argmin()
     best_x = (np.abs(nc.variables['lon'][:] - lon)).argmin()
 
-    best_lat, best_lon = nc['lat'][best_y], nc['lon'][best_y]
+    best_lat, best_lon = nc['lat'][best_y], nc['lon'][best_x]
     elevation = nc['GLDAS_elevation'][0, best_y, best_x]
 
     nc.close()
