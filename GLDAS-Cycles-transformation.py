@@ -51,19 +51,19 @@ def ea(patm, q):
     return patm * q / (0.622 * (1.0 - q) + q)
 
 
-def process_day(t, y, x, path):
+def process_day(t, loc, path):
 
     '''
     Process one day of GLDAS data and convert it to Cycles input
     '''
 
-    prcp  = [0.0] * len(y)
-    tx    = [-999.0] * len(y)
-    tn    = [999.0] * len(y)
-    wind  = [0.0] * len(y)
-    solar = [0.0] * len(y)
-    rhx   = [-999.0] * len(y)
-    rhn   = [999.0] * len(y)
+    prcp  = [0.0] * len(loc)
+    tx    = [-999.0] * len(loc)
+    tn    = [999.0] * len(loc)
+    wind  = [0.0] * len(loc)
+    solar = [0.0] * len(loc)
+    rhx   = [-999.0] * len(loc)
+    rhn   = [999.0] * len(loc)
     data  = []
     counter = 0
 
@@ -76,8 +76,10 @@ def process_day(t, y, x, path):
     for nc_name in os.listdir(nc_path):
         if nc_name.endswith(".nc4"):
             nc = Dataset(os.path.join(nc_path, nc_name), 'r')
-            for i in range(len(y)):
-                (_prcp, _temp, _wind, _solar, _rh) = ReadVar(y[i], x[i], nc)
+            for i in range(len(loc)):
+                (_prcp, _temp, _wind, _solar, _rh) = ReadVar(loc[i][0],
+                                                             loc[i][1],
+                                                             nc)
 
                 prcp[i] += _prcp
                 tx[i] = max(_temp, tx[i])
@@ -91,7 +93,7 @@ def process_day(t, y, x, path):
 
             counter += 1
 
-    for i in range(len(y)):
+    for i in range(len(loc)):
         prcp[i] /= float(counter)
         prcp[i] *= 86400.0
 
@@ -132,9 +134,9 @@ def main():
     data_path = sys.argv[3]
 
     filepath = 'location.txt'
-    y = []
-    x = []
     outfp = []
+    loc = []
+    fname = []
 
     with open(filepath) as fp:
         for _, line in enumerate(fp):
@@ -150,26 +152,34 @@ def main():
                                                                   lon,
                                                                   data_path)
 
-                x.append(_x)
-                y.append(_y)
-
                 lat_str = '%.2fS' %(abs(grid_lat)) if grid_lat < 0.0 \
                           else '%.2fN' %(abs(grid_lat))
 
                 lon_str = '%.2fW' %(abs(grid_lon)) if grid_lon < 0.0 \
                           else '%.2fE' %(abs(grid_lon))
 
+                # Check if grid is already in the list
+                if [_y, _x] in loc:
+                    print('Site %s, %s is in the same grid as %s.' %
+                        (lat_str, lon_str, fname[loc.index([_y, _x])]))
+                    continue
+
+                # Add site to list
+                loc.append([_y, _x])
+
+                # Generate output file name
                 if len(strs) == 3:
                     name = strs[2]
                     print('Processing data for %s, %s (%s)' % (lat_str,
                                                                lon_str,
                                                                name))
-                    fname = 'gldas_' + name + '.weather'
+                    fname.append('gldas_' + name + '.weather')
                 else:
                     print('Processing data for %s, %s' % (lat_str, lon_str))
-                    fname = 'gldas' + lat_str + 'x' + lon_str + '.weather'
+                    fname.append('gldas' + lat_str + 'x' + lon_str + '.weather')
 
-                outfp.append(open(fname, 'w'))
+                # Open file and write header lines
+                outfp.append(open(fname[-1], 'w'))
                 outfp[-1].write('LATITUDE %.2f\n' % (grid_lat))
                 outfp[-1].write('ALTITUDE %.2f\n' % (elevation))
                 outfp[-1].write('SCREENING_HEIGHT 2\n')
@@ -179,13 +189,13 @@ def main():
     cday = start_date
 
     while cday <= end_date:
-        data = process_day(cday, y, x, data_path)
+        data = process_day(cday, loc, data_path)
 
-        [outfp[i].write(data[i]) for i in range(len(x))]
+        [outfp[i].write(data[i]) for i in range(len(loc))]
 
         cday += timedelta(days=1)
 
-    [outfp[i].close() for i in range(len(x))]
+    [outfp[i].close() for i in range(len(loc))]
 
 
 main()
