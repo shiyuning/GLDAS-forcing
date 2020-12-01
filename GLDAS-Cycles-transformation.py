@@ -141,7 +141,7 @@ def main():
     with open(filepath) as fp:
         for _, line in enumerate(fp):
             li=line.strip()
-            if not (li.startswith("#") or li.startswith("L")):
+            if not (li.startswith("#") or li.startswith("L") or (not li)):
                 # Read lat/lon from location file
                 strs = line.split()
                 lat = float(strs[0])
