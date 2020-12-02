@@ -211,9 +211,9 @@ def main():
                                     'S' if grid_lat < 0.0 else 'N',
                                     abs(grid_lon),
                                     'W' if grid_lon < 0.0 else 'E'))
-                outfp[-1].write('LATITUDE %.2f\n' % (grid_lat))
-                outfp[-1].write('ALTITUDE %.2f\n' % (elevation))
-                outfp[-1].write('SCREENING_HEIGHT 2\n')
+                outfp[-1].write('%-20s%.2f\n' % ('LATITUDE', grid_lat))
+                outfp[-1].write('%-20s%.2f\n' % ('ALTITUDE', elevation))
+                outfp[-1].write('%-20s%.1f\n' % ('SCREENING_HEIGHT', 2.0))
                 outfp[-1].write('YEAR    DOY     PP      TX      TN      '
                                 'SOLAR   RHX     RHN     WIND\n')
 
