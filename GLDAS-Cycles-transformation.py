@@ -208,7 +208,7 @@ def main():
                 grids.append([_y, _x])
 
                 # Generate output file name
-                fname.append('weather/gldas' + sites[-1] + '.weather')
+                fname.append('weather/GLDAS_' + sites[-1] + '.weather')
 
                 # Open file and write header lines
                 outfp.append(open(fname[-1], 'w'))
