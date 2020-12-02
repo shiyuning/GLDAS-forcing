@@ -176,7 +176,7 @@ def main():
                                  % (abs(lat),
                                     'S' if lat < 0.0 else 'N',
                                     abs(lon),
-                                    'W' if lat < 0.0 else 'E'))
+                                    'W' if lon < 0.0 else 'E'))
 
 
                 # Find the closest GLDAS grid
@@ -191,12 +191,6 @@ def main():
                 grid_lon = nc['lon'][_x]
                 elevation = elev[_y][_x]
 
-                lat_str = '%.2fS' %(abs(grid_lat)) if grid_lat < 0.0 \
-                          else '%.2fN' %(abs(grid_lat))
-
-                lon_str = '%.2fW' %(abs(grid_lon)) if grid_lon < 0.0 \
-                          else '%.2fE' %(abs(grid_lon))
-
                 # Check if grid is already in the list
                 if [_y, _x] in grids:
                     print('Site %s is in the same grid as %s.' %
@@ -207,16 +201,16 @@ def main():
                 grids.append([_y, _x])
 
                 # Generate output file name
-                if len(strs) == 3:
-                    name = strs[2]
-                    print('Processing data for %s' % (sites[-1]))
-                    fname.append('gldas_' + name + '.weather')
-                else:
-                    print('Processing data for %s' % (sites[-1]))
-                    fname.append('gldas' + lat_str + 'x' + lon_str + '.weather')
+                print('Processing data for %s' % (sites[-1]))
+                fname.append('gldas' + sites[-1] + '.weather')
 
                 # Open file and write header lines
                 outfp.append(open(fname[-1], 'w'))
+                outfp[-1].write('# GLDAS grid %.3f%sx%.3f%s\n'
+                                 % (abs(grid_lat),
+                                    'S' if grid_lat < 0.0 else 'N',
+                                    abs(grid_lon),
+                                    'W' if grid_lon < 0.0 else 'E'))
                 outfp[-1].write('LATITUDE %.2f\n' % (grid_lat))
                 outfp[-1].write('ALTITUDE %.2f\n' % (elevation))
                 outfp[-1].write('SCREENING_HEIGHT 2\n')
