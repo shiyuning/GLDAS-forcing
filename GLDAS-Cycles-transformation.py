@@ -7,20 +7,24 @@ import numpy as np
 from datetime import timedelta, date, datetime
 from netCDF4 import Dataset
 
-def Closest(lat, lon, path):
+def Closest(lat, lon, GLDAS_lat_masked, GLDAS_lon_masked, GLDAS_lat, GLDAS_lon):
 
-    elevation_fp = path + '/GLDASp4_elevation_025d.nc4'
-    nc = Dataset(elevation_fp, 'r')
+    dist_masked = np.sqrt((GLDAS_lon_masked - lon)**2 +
+                          (GLDAS_lat_masked - lat)**2)
+    closest_masked = np.unravel_index(np.argmin(dist_masked, axis=None),
+                                   dist_masked.shape)
 
-    best_y = (np.abs(nc.variables['lat'][:] - lat)).argmin()
-    best_x = (np.abs(nc.variables['lon'][:] - lon)).argmin()
+    dist = np.sqrt((GLDAS_lon - lon)**2 + (GLDAS_lat - lat)**2)
+    closest = np.unravel_index(np.argmin(dist, axis=None), dist.shape)
 
-    best_lat, best_lon = nc['lat'][best_y], nc['lon'][best_x]
-    elevation = nc['GLDAS_elevation'][0, best_y, best_x]
+    if (abs(closest_masked[0] - closest[0]) > 1
+        or abs(closest_masked[1] - closest[1]) > 1):
+        land = 0
+        print("%f, %f is not a land point" % (lat, lon))
+    else:
+        land = 1
 
-    nc.close()
-
-    return (best_y, best_x, best_lat, best_lon, elevation)
+    return closest[0], closest[1], land
 
 
 def ReadVar(y, x, nc):
@@ -133,6 +137,21 @@ def main():
     end_date = datetime.strptime(sys.argv[2], "%Y-%m-%d")
     data_path = sys.argv[3]
 
+    # Read GLDAS grid data
+    elevation_fp = data_path + '/GLDASp4_elevation_025d.nc4'
+    nc = Dataset(elevation_fp, 'r')
+
+    GLDAS_lat, GLDAS_lon = np.meshgrid(nc['lat'][:], nc['lon'][:],
+                                       indexing='ij')
+    GLDAS_lat_masked, GLDAS_lon_masked = np.meshgrid(nc['lat'][:], nc['lon'][:],
+                                       indexing='ij')
+    elev = nc['GLDAS_elevation'][0]
+    elev = np.ma.filled(elev.astype(float), np.nan)
+
+
+    GLDAS_lat_masked[np.isnan(elev)] = np.nan
+    GLDAS_lon_masked[np.isnan(elev)] = np.nan
+
     filepath = 'location.txt'
     outfp = []
     loc = []
@@ -148,9 +167,16 @@ def main():
                 lon = float(strs[1])
 
                 # Find the closest GLDAS grid
-                (_y, _x, grid_lat, grid_lon, elevation) = Closest(lat,
-                                                                  lon,
-                                                                  data_path)
+                _y, _x, land = Closest(lat, lon,
+                                       GLDAS_lat_masked, GLDAS_lon_masked,
+                                       GLDAS_lat, GLDAS_lon)
+
+                if land == 0:
+                    continue
+
+                grid_lat = nc['lat'][_y]
+                grid_lon = nc['lon'][_x]
+                elevation = elev[_y][_x]
 
                 lat_str = '%.2fS' %(abs(grid_lat)) if grid_lat < 0.0 \
                           else '%.2fN' %(abs(grid_lat))
