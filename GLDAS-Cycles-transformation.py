@@ -22,9 +22,12 @@ def Closest(site, lat, lon,
     if (abs(closest_masked[0] - closest[0]) > 1
         or abs(closest_masked[1] - closest[1]) > 1):
         land = 0
-        print("%s is not a land point" % (site))
+        print("Cannot find nearest land grid to %s." % (site))
     else:
         land = 1
+        if (closest_masked[0] != closest[0] or closest_masked[1] != closest[1]):
+            print('Nearest GLDAS grid to %s is not a land point. '
+                  'A nearest land point is chosen instead.' % (site))
 
     return closest_masked[0], closest_masked[1], land
 
@@ -201,7 +204,6 @@ def main():
                 grids.append([_y, _x])
 
                 # Generate output file name
-                print('Processing data for %s' % (sites[-1]))
                 fname.append('gldas' + sites[-1] + '.weather')
 
                 # Open file and write header lines
