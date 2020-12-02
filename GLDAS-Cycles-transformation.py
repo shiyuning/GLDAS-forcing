@@ -7,7 +7,9 @@ import numpy as np
 from datetime import timedelta, date, datetime
 from netCDF4 import Dataset
 
-def Closest(lat, lon, GLDAS_lat_masked, GLDAS_lon_masked, GLDAS_lat, GLDAS_lon):
+def Closest(site, lat, lon,
+            GLDAS_lat_masked, GLDAS_lon_masked,
+            GLDAS_lat, GLDAS_lon):
 
     dist_masked = np.sqrt((GLDAS_lon_masked - lon)**2 +
                           (GLDAS_lat_masked - lat)**2)
@@ -20,11 +22,11 @@ def Closest(lat, lon, GLDAS_lat_masked, GLDAS_lon_masked, GLDAS_lat, GLDAS_lon):
     if (abs(closest_masked[0] - closest[0]) > 1
         or abs(closest_masked[1] - closest[1]) > 1):
         land = 0
-        print("%f, %f is not a land point" % (lat, lon))
+        print("%s is not a land point" % (site))
     else:
         land = 1
 
-    return closest[0], closest[1], land
+    return closest_masked[0], closest_masked[1], land
 
 
 def ReadVar(y, x, nc):
@@ -55,19 +57,19 @@ def ea(patm, q):
     return patm * q / (0.622 * (1.0 - q) + q)
 
 
-def process_day(t, loc, path):
+def process_day(t, grids, path):
 
     '''
     Process one day of GLDAS data and convert it to Cycles input
     '''
 
-    prcp  = [0.0] * len(loc)
-    tx    = [-999.0] * len(loc)
-    tn    = [999.0] * len(loc)
-    wind  = [0.0] * len(loc)
-    solar = [0.0] * len(loc)
-    rhx   = [-999.0] * len(loc)
-    rhn   = [999.0] * len(loc)
+    prcp  = [0.0] * len(grids)
+    tx    = [-999.0] * len(grids)
+    tn    = [999.0] * len(grids)
+    wind  = [0.0] * len(grids)
+    solar = [0.0] * len(grids)
+    rhx   = [-999.0] * len(grids)
+    rhn   = [999.0] * len(grids)
     data  = []
     counter = 0
 
@@ -80,9 +82,9 @@ def process_day(t, loc, path):
     for nc_name in os.listdir(nc_path):
         if nc_name.endswith(".nc4"):
             nc = Dataset(os.path.join(nc_path, nc_name), 'r')
-            for i in range(len(loc)):
-                (_prcp, _temp, _wind, _solar, _rh) = ReadVar(loc[i][0],
-                                                             loc[i][1],
+            for i in range(len(grids)):
+                (_prcp, _temp, _wind, _solar, _rh) = ReadVar(grids[i][0],
+                                                             grids[i][1],
                                                              nc)
 
                 prcp[i] += _prcp
@@ -97,7 +99,7 @@ def process_day(t, loc, path):
 
             counter += 1
 
-    for i in range(len(loc)):
+    for i in range(len(grids)):
         prcp[i] /= float(counter)
         prcp[i] *= 86400.0
 
@@ -154,7 +156,8 @@ def main():
 
     filepath = 'location.txt'
     outfp = []
-    loc = []
+    grids = []
+    sites = []
     fname = []
 
     with open(filepath) as fp:
@@ -166,8 +169,18 @@ def main():
                 lat = float(strs[0])
                 lon = float(strs[1])
 
+                if len(strs) == 3:
+                    sites.append(strs[2])
+                else:
+                    sites.append('%.3f%sx%.3f%s'
+                                 % (abs(lat),
+                                    'S' if lat < 0.0 else 'N',
+                                    abs(lon),
+                                    'W' if lat < 0.0 else 'E'))
+
+
                 # Find the closest GLDAS grid
-                _y, _x, land = Closest(lat, lon,
+                _y, _x, land = Closest(sites[-1], lat, lon,
                                        GLDAS_lat_masked, GLDAS_lon_masked,
                                        GLDAS_lat, GLDAS_lon)
 
@@ -185,27 +198,21 @@ def main():
                           else '%.2fE' %(abs(grid_lon))
 
                 # Check if grid is already in the list
-                if [_y, _x] in loc:
-                    if len(strs) == 3:
-                        print('Site %s is in the same grid as %s.' %
-                            (strs[2], fname[loc.index([_y, _x])]))
-                    else:
-                        print('Site %s, %s is in the same grid as %s.' %
-                            (lat_str, lon_str, fname[loc.index([_y, _x])]))
+                if [_y, _x] in grids:
+                    print('Site %s is in the same grid as %s.' %
+                        (sites[-1], fname[grids.index([_y, _x])]))
                     continue
 
                 # Add site to list
-                loc.append([_y, _x])
+                grids.append([_y, _x])
 
                 # Generate output file name
                 if len(strs) == 3:
                     name = strs[2]
-                    print('Processing data for %s, %s (%s)' % (lat_str,
-                                                               lon_str,
-                                                               name))
+                    print('Processing data for %s' % (sites[-1]))
                     fname.append('gldas_' + name + '.weather')
                 else:
-                    print('Processing data for %s, %s' % (lat_str, lon_str))
+                    print('Processing data for %s' % (sites[-1]))
                     fname.append('gldas' + lat_str + 'x' + lon_str + '.weather')
 
                 # Open file and write header lines
@@ -219,13 +226,13 @@ def main():
     cday = start_date
 
     while cday <= end_date:
-        data = process_day(cday, loc, data_path)
+        data = process_day(cday, grids, data_path)
 
-        [outfp[i].write(data[i]) for i in range(len(loc))]
+        [outfp[i].write(data[i]) for i in range(len(grids))]
 
         cday += timedelta(days=1)
 
-    [outfp[i].close() for i in range(len(loc))]
+    [outfp[i].close() for i in range(len(grids))]
 
 
 main()
