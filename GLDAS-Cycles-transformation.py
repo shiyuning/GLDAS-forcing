@@ -163,6 +163,10 @@ def main():
     sites = []
     fname = []
 
+    # Create weather directory for created weather files
+    if not os.path.exists('weather'):
+        os.makedirs('weather')
+
     with open(filepath) as fp:
         for _, line in enumerate(fp):
             li=line.strip()
@@ -204,7 +208,7 @@ def main():
                 grids.append([_y, _x])
 
                 # Generate output file name
-                fname.append('gldas' + sites[-1] + '.weather')
+                fname.append('weather/gldas' + sites[-1] + '.weather')
 
                 # Open file and write header lines
                 outfp.append(open(fname[-1], 'w'))
