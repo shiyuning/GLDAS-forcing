@@ -195,7 +195,7 @@ def main():
                 # Check if grid is already in the list
                 if [_y, _x] in grids:
                     print('Site %s is in the same grid as %s.' %
-                          (sites[-1], fname[grids.index([_y, _x])]))
+                          (sites[-1], sites[grids.index([_y, _x])]))
                     continue
 
                 # Add site to list
