@@ -30,7 +30,10 @@ def closest_grid(site, lat, lon,
             print('Nearest GLDAS grid to %s is not a land point. '
                   'A nearest land point is chosen instead.' % (site))
 
-    return closest_masked[0], closest_masked[1], land
+    ind = np.ravel_multi_index([closest_masked[0], closest_masked[1]],
+                               GLDAS_lat.shape)
+
+    return ind, land
 
 
 def read_var(grids, nc):
@@ -58,7 +61,7 @@ def ea(patm, q):
     return patm * q / (0.622 * (1.0 - q) + q)
 
 
-def process_day(t, grids, path):
+def process_day(t, grids, path, fp):
     '''Process one day of GLDAS data and convert it to Cycles input
     '''
 
@@ -111,55 +114,56 @@ def process_day(t, grids, path):
     tn -= 273.15
 
     for i in range(len(grids)):
-        data.append('%-16s%-8.4f%-8.2f%-8.2f%-8.3f%-8.2f%-8.2f%-8.2f\n' \
-                    % (t.strftime('%Y    %j'),
-                       prcp[i],
-                       tx[i],
-                       tn[i],
-                       solar[i],
-                       rhx[i],
-                       rhn[i],
-                       wind[i]))
-
-    return data
+        fp[i].write('%-16s%-8.4f%-8.2f%-8.2f%-8.3f%-8.2f%-8.2f%-8.2f\n' \
+                     % (t.strftime('%Y    %j'),
+                        prcp[i],
+                        tx[i],
+                        tn[i],
+                        solar[i],
+                        rhx[i],
+                        rhn[i],
+                        wind[i]))
 
 
 def main():
+    '''Generate Cycles weather files from GLDAS forcing for the locations
+    specified in a location.txt file
+    '''
+    # Read start/end dates and path to GLDAS files from command line
     if (len(sys.argv) != 4):
-        print("Illegal number of parameters.")
-        print("Usage: GLDAS-Cycles-transformation.py "
-              "YYYY-MM-DD YYYY-MM-DD DATA_PATH")
-        sys.exit(0)
+        sys.exit("Illegal number of parameters."
+                 "Usage: GLDAS-Cycles-transformation.py "
+                 "YYYY-MM-DD YYYY-MM-DD DATA_PATH")
 
     start_date = datetime.strptime(sys.argv[1], "%Y-%m-%d")
     end_date = datetime.strptime(sys.argv[2], "%Y-%m-%d")
     data_path = sys.argv[3]
 
-    # Read GLDAS grid data
-    elevation_fp = data_path + '/GLDASp4_elevation_025d.nc4'
+    # Read GLDAS grid and elevation data
+    with Dataset(data_path + '/GLDASp4_elevation_025d.nc4', 'r') as nc:
+        elev_array = nc['GLDAS_elevation'][0]
+        elev_array = np.ma.filled(elev_array.astype(float), np.nan)
 
-    nc = Dataset(elevation_fp, 'r')
+        GLDAS_lat, GLDAS_lon = np.meshgrid(nc['lat'][:], nc['lon'][:],
+                                           indexing='ij')
+        GLDAS_lat_masked, GLDAS_lon_masked = np.meshgrid(nc['lat'][:],
+                                                         nc['lon'][:],
+                                                         indexing='ij')
 
-    GLDAS_lat, GLDAS_lon = np.meshgrid(nc['lat'][:], nc['lon'][:],
-                                       indexing='ij')
-    GLDAS_lat_masked, GLDAS_lon_masked = np.meshgrid(nc['lat'][:], nc['lon'][:],
-                                                     indexing='ij')
-    elev = nc['GLDAS_elevation'][0]
-    elev = np.ma.filled(elev.astype(float), np.nan)
+    # Mask sea grids lat/lon as nan
+    GLDAS_lat_masked[np.isnan(elev_array)] = np.nan
+    GLDAS_lon_masked[np.isnan(elev_array)] = np.nan
 
-    GLDAS_lat_masked[np.isnan(elev)] = np.nan
-    GLDAS_lon_masked[np.isnan(elev)] = np.nan
-
-    filepath = 'location.txt'
-    weather_fp = []
+    site_array = []
     grids = []
-    sites = []
+
     # Create weather directory for created weather files
     if not os.path.exists('weather'):
         os.makedirs('weather')
 
-    with open(filepath) as fp:
-        for _, line in enumerate(fp):
+    # Read locations from file
+    with open('location.txt') as fp:
+        for line in fp:
             li = line.strip()
             if not (li.startswith("#") or li.startswith("L") or (not li)):
                 # Read lat/lon from location file
@@ -168,64 +172,62 @@ def main():
                 lon = float(strs[1])
 
                 if len(strs) == 3:          # Site name is defined
-                    sites.append(strs[2])
+                    site_name = strs[2]
                 else:                       # Site name is not defined
-                    sites.append('%.3f%sx%.3f%s'
-                                 % (abs(lat),
-                                    'S' if lat < 0.0 else 'N',
-                                    abs(lon),
-                                    'W' if lon < 0.0 else 'E'))
+                    site_name = '%.3f%sx%.3f%s' % (abs(lat),
+                                                   'S' if lat < 0.0 else 'N',
+                                                   abs(lon),
+                                                   'W' if lon < 0.0 else 'E')
 
                 # Find the closest GLDAS grid
-                _y, _x, land = closest_grid(sites[-1], lat, lon,
-                                            GLDAS_lat_masked, GLDAS_lon_masked,
-                                            GLDAS_lat, GLDAS_lon)
+                grid_ind, land = closest_grid(site_name, lat, lon,
+                                              GLDAS_lat_masked,
+                                              GLDAS_lon_masked,
+                                              GLDAS_lat, GLDAS_lon)
 
-                if land == 0:
+                # Skip sea grids
+                if not land:
                     continue
 
-                grid_lat = nc['lat'][_y]
-                grid_lon = nc['lon'][_x]
-                elevation = elev[_y][_x]
-
-                ind = np.ravel_multi_index([_y, _x], elev.shape)
-
                 # Check if grid is already in the list
-                if ind in grids:
+                if grid_ind in grids:
                     print('Site %s is in the same grid as %s.' %
-                          (sites[-1], sites[grids.index(ind)]))
+                          (site_name, site_array[grids.index([grid_ind])]))
                     continue
 
                 # Add site to list
-                grids.append(ind)
+                site_array.append(site_name)
+                grids.append(grid_ind)
 
-                # Open file and write header lines
-                fn = 'weather/GLDAS_' + sites[-1] + '.weather'
-                weather_fp.append(open(fn, 'w', buffering=1))
-                weather_fp[-1].write('# GLDAS grid %.3f%sx%.3f%s\n'
-                                     % (abs(grid_lat),
-                                        'S' if grid_lat < 0.0 else 'N',
-                                        abs(grid_lon),
-                                        'W' if grid_lon < 0.0 else 'E'))
-                weather_fp[-1].write('%-20s%.2f\n' % ('LATITUDE', grid_lat))
-                weather_fp[-1].write('%-20s%.2f\n' % ('ALTITUDE', elevation))
-                weather_fp[-1].write('%-20s%.1f\n' % ('SCREENING_HEIGHT', 2.0))
-                weather_fp[-1].write('%-8s%-8s%-8s%-8s%-8s%-8s%-8s%-8s%-s\n' %
-                                     ('YEAR', 'DOY', 'PP', 'TX', 'TN', 'SOLAR',
-                                      'RHX', 'RHN', 'WIND'))
+    weather_fp = []
 
-    nc.close()
+    for i, g in enumerate(grids):
+        # Get lat/lon and elevation of nearest grid
+        grid_lat = GLDAS_lat.flatten()[g]
+        grid_lon = GLDAS_lon.flatten()[g]
+        elevation = elev_array.flatten()[g]
 
+        # Open weather file and write header lines
+        fn = 'weather/GLDAS_' + site_array[i] + '.weather'
+        weather_fp.append(open(fn, 'w', buffering=1))
+        weather_fp[-1].write('# GLDAS grid %.3f%sx%.3f%s\n'
+                             % (abs(grid_lat), 'S' if grid_lat < 0.0 else 'N',
+                                abs(grid_lon), 'W' if grid_lon < 0.0 else 'E'))
+        weather_fp[-1].write('%-20s%.2f\n' % ('LATITUDE', grid_lat))
+        weather_fp[-1].write('%-20s%.2f\n' % ('ALTITUDE', elevation))
+        weather_fp[-1].write('%-20s%.1f\n' % ('SCREENING_HEIGHT', 2.0))
+        weather_fp[-1].write('%-8s%-8s%-8s%-8s%-8s%-8s%-8s%-8s%-s\n' %
+                             ('YEAR', 'DOY', 'PP', 'TX', 'TN', 'SOLAR',
+                              'RHX', 'RHN', 'WIND'))
+
+    # Read GLDAS data and convert to Cycles weathare files
     cday = start_date
-
     while cday <= end_date:
-        data = process_day(cday, grids, data_path)
-
-        [weather_fp[i].write(data[i]) for i in range(len(grids))]
+        process_day(cday, grids, data_path, weather_fp)
 
         cday += timedelta(days=1)
 
-    [weather_fp[i].close() for i in range(len(grids))]
+    [f.close() for f in weather_fp]
 
 
 if __name__ == '__main__':
