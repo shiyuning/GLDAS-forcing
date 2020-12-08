@@ -33,19 +33,19 @@ def closest_grid(site, lat, lon,
     return closest_masked[0], closest_masked[1], land
 
 
-def read_var(y, x, nc):
-    _prcp  = nc['Rainf_f_tavg'][0, y, x]
-    _temp  = nc['Tair_f_inst'][0, y, x]
-    _wind  = nc['Wind_f_inst'][0, y, x]
-    _solar = nc['SWdown_f_tavg'][0, y, x]
-    _pres  = nc['Psurf_f_inst'][0, y, x]
-    _spfh  = nc['Qair_f_inst'][0, y, x]
+def read_var(grids, nc):
+    _prcp  = nc['Rainf_f_tavg'][0].flatten()[grids]
+    _temp  = nc['Tair_f_inst'][0].flatten()[grids]
+    _wind  = nc['Wind_f_inst'][0].flatten()[grids]
+    _solar = nc['SWdown_f_tavg'][0].flatten()[grids]
+    _pres  = nc['Psurf_f_inst'][0].flatten()[grids]
+    _spfh  = nc['Qair_f_inst'][0].flatten()[grids]
 
-    es = 611.2 * math.exp(17.67 * (_temp - 273.15) / (_temp - 273.15 + 243.5))
+    es = 611.2 * np.exp(17.67 * (_temp - 273.15) / (_temp - 273.15 + 243.5))
     ws = 0.622 * es / (_pres - es)
     w = _spfh / (1.0 - _spfh)
     _rh = w / ws
-    _rh = min(_rh, 1.0)
+    _rh = np.minimum(_rh, [1.0] * len(_rh))
 
     return (_prcp, _temp, _wind, _solar, _rh)
 
@@ -81,38 +81,36 @@ def process_day(t, grids, path):
     for nc_name in os.listdir(nc_path):
         if nc_name.endswith(".nc4"):
             nc = Dataset(os.path.join(nc_path, nc_name), 'r')
-            for i in range(len(grids)):
-                (_prcp, _temp, _wind, _solar, _rh) = read_var(grids[i][0],
-                                                              grids[i][1],
-                                                              nc)
 
-                prcp[i] += _prcp
-                tx[i] = max(_temp, tx[i])
-                tn[i] = min(_temp, tn[i])
-                wind[i] += _wind
-                solar[i] += _solar
-                rhx[i] = max(_rh, rhx[i])
-                rhn[i] = min(_rh, rhn[i])
+            (_prcp, _temp, _wind, _solar, _rh) = read_var(grids, nc)
+
+            prcp += _prcp
+            tx = np.maximum(_temp, tx)
+            tn = np.minimum(_temp, tn)
+            wind += _wind
+            solar += _solar
+            rhx = np.maximum(_rh, rhx)
+            rhn = np.minimum(_rh, rhn)
 
             nc.close()
 
             counter += 1
 
+    prcp /= float(counter)
+    prcp *= 86400.0
+
+    wind /= float(counter)
+
+    solar /= float(counter)
+    solar *= 86400.0 / 1.0E6
+
+    rhx *= 100.0
+    rhn *= 100.0
+
+    tx -= 273.15
+    tn -= 273.15
+
     for i in range(len(grids)):
-        prcp[i] /= float(counter)
-        prcp[i] *= 86400.0
-
-        wind[i] /= float(counter)
-
-        solar[i] /= float(counter)
-        solar[i] *= 86400.0 / 1.0E6
-
-        rhx[i] *= 100.0
-        rhn[i] *= 100.0
-
-        tx[i] -= 273.15
-        tn[i] -= 273.15
-
         data.append('%-16s%-8.4f%-8.2f%-8.2f%-8.3f%-8.2f%-8.2f%-8.2f\n' \
                     % (t.strftime('%Y    %j'),
                        prcp[i],
@@ -139,6 +137,7 @@ def main():
 
     # Read GLDAS grid data
     elevation_fp = data_path + '/GLDASp4_elevation_025d.nc4'
+
     nc = Dataset(elevation_fp, 'r')
 
     GLDAS_lat, GLDAS_lon = np.meshgrid(nc['lat'][:], nc['lon'][:],
@@ -148,7 +147,6 @@ def main():
     elev = nc['GLDAS_elevation'][0]
     elev = np.ma.filled(elev.astype(float), np.nan)
 
-
     GLDAS_lat_masked[np.isnan(elev)] = np.nan
     GLDAS_lon_masked[np.isnan(elev)] = np.nan
 
@@ -156,8 +154,6 @@ def main():
     weather_fp = []
     grids = []
     sites = []
-    fname = []
-
     # Create weather directory for created weather files
     if not os.path.exists('weather'):
         os.makedirs('weather')
@@ -192,20 +188,20 @@ def main():
                 grid_lon = nc['lon'][_x]
                 elevation = elev[_y][_x]
 
+                ind = np.ravel_multi_index([_y, _x], elev.shape)
+
                 # Check if grid is already in the list
-                if [_y, _x] in grids:
+                if ind in grids:
                     print('Site %s is in the same grid as %s.' %
-                          (sites[-1], sites[grids.index([_y, _x])]))
+                          (sites[-1], sites[grids.index(ind)]))
                     continue
 
                 # Add site to list
-                grids.append([_y, _x])
-
-                # Generate output file name
-                fname.append('weather/GLDAS_' + sites[-1] + '.weather')
+                grids.append(ind)
 
                 # Open file and write header lines
-                weather_fp.append(open(fname[-1], 'w'))
+                fn = 'weather/GLDAS_' + sites[-1] + '.weather'
+                weather_fp.append(open(fn, 'w', buffering=1))
                 weather_fp[-1].write('# GLDAS grid %.3f%sx%.3f%s\n'
                                      % (abs(grid_lat),
                                         'S' if grid_lat < 0.0 else 'N',
@@ -217,6 +213,8 @@ def main():
                 weather_fp[-1].write('%-8s%-8s%-8s%-8s%-8s%-8s%-8s%-8s%-s\n' %
                                      ('YEAR', 'DOY', 'PP', 'TX', 'TN', 'SOLAR',
                                       'RHX', 'RHN', 'WIND'))
+
+    nc.close()
 
     cday = start_date
 
