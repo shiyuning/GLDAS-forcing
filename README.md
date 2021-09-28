@@ -21,4 +21,4 @@ GLDAS-2.1 forcing is available from 1 January 2000 to now.
    ```
    The first `YYYY-MM-DD` indicates the start year, month, and date, and the second `YYYY-MM-DD` indicates the end year, month, and date. `PATH_TO_NETCDF4_DATA` is the directory where netCDF4 data are stored, which should be the `DOWNLOAD_PATH` in Step 2. The desired locations should be added to the `location.txt` file.
 
-   **NOTE:** the `GLDAS-Cycles-transpormation.py` script requires [Python netCDF4 module](https://unidata.github.io/netcdf4-python/netCDF4/index.html), which can be installed in the [Anaconda environment](https://anaconda.org/anaconda/netcdf4).
+   **NOTE:** the `GLDAS-Cycles-transpormation.py` script requires [Python netCDF4 module](https://unidata.github.io/netcdf4-python/).
